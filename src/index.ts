@@ -5,6 +5,7 @@ export {
   BigintIsh,
   ChainId,
   TradeType,
+  TradeState,
   Rounding,
   FACTORY_ADDRESS,
   INIT_CODE_HASH,

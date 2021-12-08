@@ -19,6 +19,13 @@ export enum Rounding {
   ROUND_UP
 }
 
+export enum TradeState {
+  SELL_ALL,
+  SELL_TOKEN_0,
+  SELL_TOKEN_1,
+  SELL_NONE
+}
+
 export const FACTORY_ADDRESS = '0x9438f6b31183192a6e4c8495d45d9b95287cf60c'
 
 export const INIT_CODE_HASH = '0xfb6eb1c48f11264aea9989072ad29f2435f6c2e2609384918aacf9d69cb4769c'

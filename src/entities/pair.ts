@@ -16,7 +16,8 @@ import {
   FIVE,
   EIGHT,
   _10000,
-  ChainId
+  ChainId,
+  TradeState
 } from '../constants'
 import { sqrt, parseBigintIsh } from '../utils'
 import { InsufficientReservesError, InsufficientInputAmountError } from '../errors'
@@ -30,7 +31,8 @@ export class Pair {
   public readonly fee: number
   public readonly boost0: number
   public readonly boost1: number
-  public readonly SqrtK: JSBI
+  public readonly sqrtK: JSBI
+  public readonly tradeState: TradeState
 
   private readonly tokenAmounts: [TokenAmount, TokenAmount]
 
@@ -60,7 +62,8 @@ export class Pair {
     isXybk: Boolean,
     fee: number,
     boost0: number,
-    boost1: number
+    boost1: number,
+    tradeState: TradeState
   ) {
     const tokenAmounts = tokenAmountA.token.sortsBefore(tokenAmountB.token) // does safety checks
       ? [tokenAmountA, tokenAmountB]
@@ -70,14 +73,15 @@ export class Pair {
       Pair.getAddress(tokenAmounts[0].token, tokenAmounts[1].token),
       18,
       'IF-LP',
-      'Impossible Swap LPs'
+      'Impossible Swap LPs: ' + tokenAmounts[0].token.symbol + '/' + tokenAmounts[1].token.symbol
     )
     this.tokenAmounts = tokenAmounts as [TokenAmount, TokenAmount]
     this.isXybk = isXybk
     this.fee = fee
     this.boost0 = boost0
     this.boost1 = boost1
-    this.SqrtK = this.computeXybkSqrtK(boost0, boost1)
+    this.sqrtK = this.computeXybkSqrtK(boost0, boost1)
+    this.tradeState = tradeState
   }
 
   /**
@@ -109,8 +113,10 @@ export class Pair {
   /**
    * Returns artificial liquidity term [(boost-1)*SqrtK] to be added to real reserves for xybk invariant
    */
+
+  // TODO: probably can make private
   public artiLiquidityTerm(boost: number): JSBI {
-    return JSBI.multiply(JSBI.BigInt(boost - 1), this.SqrtK)
+    return JSBI.multiply(JSBI.BigInt(boost - 1), this.sqrtK)
   }
 
   public getBoost(): number {
@@ -145,7 +151,7 @@ export class Pair {
   }
 
   /**
-   * Returns the price of token 0 in token 1
+   * Returns the instantaneous  price of token 0 in token 1 (could be xybk)
    */
   public get token0Price(): Price {
     if (this.isXybk) {
@@ -169,7 +175,7 @@ export class Pair {
   }
 
   /**
-   * Returns the current mid price of the pair in terms of token1, i.e. the ratio of reserve0 to reserve1
+   * Returns the instantaneous price of token 1 in token 0 (could be xybk)
    */
   public get token1Price(): Price {
     if (this.isXybk) {
@@ -186,7 +192,7 @@ export class Pair {
   }
 
   /**
-   * Returns the uni prices of token 0 in token 1
+   * Returns the uni prices of token 1 in token 0
    */
   public get token1LpPrice(): Price {
     return new Price(this.token1, this.token0, this.tokenAmounts[1].raw, this.tokenAmounts[0].raw)
@@ -258,21 +264,21 @@ export class Pair {
       if (
         JSBI.greaterThan(
           JSBI.add(inputAmountWithFee, JSBI.multiply(inputReserveJSBI, _10000)),
-          JSBI.multiply(this.SqrtK, _10000)
+          JSBI.multiply(this.sqrtK, _10000)
         )
       ) {
         // If balance started from <SqrtK and ended at >SqrtK and boosts are different, there'll be different amountIn/Out
         // Don't need to check in other case for reserveIn < reserveIn.add(x) <= SqrtK since that case doesnt cross midpt
-        if (this.boost0 !== this.boost1 && JSBI.greaterThan(this.SqrtK, inputReserveJSBI)) {
-          outputAmountJSBI = JSBI.subtract(outputReserveJSBI, this.SqrtK)
-          let diff: TokenAmount = new TokenAmount(inputAmount.token, JSBI.subtract(this.SqrtK, inputReserveJSBI))
+        if (this.boost0 !== this.boost1 && JSBI.greaterThan(this.sqrtK, inputReserveJSBI)) {
+          outputAmountJSBI = JSBI.subtract(outputReserveJSBI, this.sqrtK)
+          let diff: TokenAmount = new TokenAmount(inputAmount.token, JSBI.subtract(this.sqrtK, inputReserveJSBI))
           inputAmountWithFee = JSBI.subtract(inputAmountWithFee, JSBI.multiply(diff.raw, _10000)) // This is multiplied by 10k
           inputAmount.add(diff)
           inputReserve.add(diff)
           // If tokenIn = token0, balanceIn > sqrtK => balance0>sqrtK, use boost0
           let term: JSBI = this.artiLiquidityTerm(isMatch ? this.boost0 : this.boost1)
-          outputReserveJSBI = JSBI.add(this.SqrtK, term)
-          inputReserveJSBI = JSBI.add(this.SqrtK, term) // Does this work?
+          outputReserveJSBI = JSBI.add(this.sqrtK, term)
+          inputReserveJSBI = JSBI.add(this.sqrtK, term) // Does this work?
         } else {
           // If tokenIn = token0, balanceIn > sqrtK => balance0>sqrtK, use boost0
           let term: JSBI = this.artiLiquidityTerm(isMatch ? this.boost0 : this.boost1)
@@ -306,7 +312,8 @@ export class Pair {
         this.isXybk,
         this.fee,
         this.boost0,
-        this.boost1
+        this.boost1,
+        this.tradeState
       )
     ]
   }
@@ -331,7 +338,7 @@ export class Pair {
     let inputAmountJSBI: JSBI = JSBI.BigInt(0)
     if (this.isXybk) {
       // If reserveOut - amountOut >= SqrtK
-      if (JSBI.greaterThan(JSBI.subtract(outputReserveJSBI, outputAmount.raw), this.SqrtK)) {
+      if (JSBI.greaterThan(JSBI.subtract(outputReserveJSBI, outputAmount.raw), this.sqrtK)) {
         // If tokenOut == token0, balanceOut > sqrtK => balance1>sqrtK, use boost1
         let term: JSBI = this.artiLiquidityTerm(isMatch ? this.boost0 : this.boost1)
         inputReserveJSBI = JSBI.add(inputReserveJSBI, term)
@@ -339,20 +346,20 @@ export class Pair {
       } else {
         // If balance started from <SqrtK and ended at >SqrtK and boosts are different, there'll be different amountIn/Out
         // Don't need to check in other case for reserveOut > reserveOut.sub(x) >= sqrtK since that case doesnt cross midpt
-        if (this.boost0 !== this.boost1 && JSBI.greaterThan(outputReserveJSBI, this.SqrtK)) {
+        if (this.boost0 !== this.boost1 && JSBI.greaterThan(outputReserveJSBI, this.sqrtK)) {
           // Break into 2 trades => start point -> midpoint (SqrtK, SqrtK), then midpoint -> final point
-          let diff: TokenAmount = new TokenAmount(outputAmount.token, JSBI.subtract(outputReserveJSBI, this.SqrtK))
+          let diff: TokenAmount = new TokenAmount(outputAmount.token, JSBI.subtract(outputReserveJSBI, this.sqrtK))
           outputAmount = outputAmount.subtract(diff)
           outputReserve = outputReserve.subtract(diff)
           outputReserveJSBI = JSBI.subtract(outputReserveJSBI, diff.raw)
           inputAmountJSBI = JSBI.divide(
-            JSBI.multiply(JSBI.subtract(this.SqrtK, inputReserveJSBI), _10000),
+            JSBI.multiply(JSBI.subtract(this.sqrtK, inputReserveJSBI), _10000),
             JSBI.BigInt(10000 - this.fee)
           )
           // If tokenOut = token0, balanceOut < sqrtK => balance0<sqrtK, use boost1
           let term: JSBI = this.artiLiquidityTerm(isMatch ? this.boost1 : this.boost0)
-          outputReserveJSBI = JSBI.add(this.SqrtK, term)
-          inputReserveJSBI = JSBI.add(this.SqrtK, term) // Does this work?
+          outputReserveJSBI = JSBI.add(this.sqrtK, term)
+          inputReserveJSBI = JSBI.add(this.sqrtK, term) // Does this work?
         } else {
           // If tokenOut = token0, balanceOut < sqrtK => balance0<sqrtK, use boost1
           let term: JSBI = this.artiLiquidityTerm(isMatch ? this.boost1 : this.boost0)
@@ -375,7 +382,8 @@ export class Pair {
         this.isXybk,
         this.fee,
         this.boost0,
-        this.boost1
+        this.boost1,
+        this.tradeState
       )
     ]
   }

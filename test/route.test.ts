@@ -1,7 +1,7 @@
-import { Token, WETH, ChainId, Pair, TokenAmount, Route, ETHER } from '../src'
+import { Token, WETH, ChainId, Pair, TokenAmount, Route, ETHER, TradeState } from '../src'
 
 const BasicPair = (a: TokenAmount, b: TokenAmount): Pair => {
-  return new Pair(a, b, false, 30, 1, 1)
+  return new Pair(a, b, false, 30, 1, 1, TradeState.SELL_ALL)
 }
 
 describe('Route', () => {

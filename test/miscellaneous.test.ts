@@ -1,8 +1,8 @@
-import { ChainId, Token, TokenAmount, Pair, InsufficientInputAmountError } from '../src'
+import { ChainId, Token, TokenAmount, Pair, InsufficientInputAmountError, TradeState } from '../src'
 import { sortedInsert } from '../src/utils'
 
 const BasicPair = (a: TokenAmount, b: TokenAmount): Pair => {
-  return new Pair(a, b, false, 30, 1, 1)
+  return new Pair(a, b, false, 30, 1, 1, TradeState.SELL_ALL)
 }
 
 describe('miscellaneous', () => {
