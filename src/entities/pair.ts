@@ -20,7 +20,7 @@ import {
   TradeState
 } from '../constants'
 import { sqrt, parseBigintIsh } from '../utils'
-import { InsufficientReservesError, InsufficientInputAmountError } from '../errors'
+import { InsufficientReservesError, InsufficientInputAmountError, TradeNotSupportedError } from '../errors'
 import { Token } from './token'
 
 let PAIR_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: string } } = {}
@@ -258,7 +258,7 @@ export class Pair {
       (this.tradeState === TradeState.SELL_TOKEN_1 && !isMatch) ||
       this.tradeState === TradeState.SELL_NONE
     ) {
-      throw new InsufficientInputAmountError()
+      throw new TradeNotSupportedError()
     }
 
     let reserveIn: TokenAmount = this.reserveOf(amountIn.token)
@@ -336,7 +336,7 @@ export class Pair {
       (this.tradeState === TradeState.SELL_TOKEN_1 && !isMatch) ||
       this.tradeState === TradeState.SELL_NONE
     ) {
-      throw new InsufficientInputAmountError()
+      throw new TradeNotSupportedError()
     }
 
     const reserveOut: TokenAmount = this.reserveOf(amountOut.token)

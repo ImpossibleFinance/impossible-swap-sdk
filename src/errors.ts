@@ -28,3 +28,16 @@ export class InsufficientInputAmountError extends Error {
     if (CAN_SET_PROTOTYPE) Object.setPrototypeOf(this, new.target.prototype)
   }
 }
+
+/**
+ * Indicates that the pair is not supporting trades in this direction at this moment
+ */
+ export class TradeNotSupportedError extends Error {
+  public readonly isTradeNotSupportedError: true = true
+
+  public constructor() {
+    super()
+    this.name = this.constructor.name
+    if (CAN_SET_PROTOTYPE) Object.setPrototypeOf(this, new.target.prototype)
+  }
+}
