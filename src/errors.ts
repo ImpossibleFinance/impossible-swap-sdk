@@ -32,7 +32,7 @@ export class InsufficientInputAmountError extends Error {
 /**
  * Indicates that the pair is not supporting trades in this direction at this moment
  */
- export class TradeNotSupportedError extends Error {
+export class TradeNotSupportedError extends Error {
   public readonly isTradeNotSupportedError: true = true
 
   public constructor() {

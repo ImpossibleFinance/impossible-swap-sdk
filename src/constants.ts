@@ -26,9 +26,9 @@ export enum TradeState {
   SELL_NONE
 }
 
-export const FACTORY_ADDRESS = '0x207be8d56C2Ce8b6C732879d8D4497fDE4a1F1CB'
+export const FACTORY_ADDRESS = '0x4233ad9b8b7c1ccf0818907908a7f0796a3df85f'
 
-export const INIT_CODE_HASH = '0xfb6eb1c48f11264aea9989072ad29f2435f6c2e2609384918aacf9d69cb4769c'
+export const INIT_CODE_HASH = '0xfc84b622ba228c468b74c2d99bfe9454ffac280ac017f05a02feb9f739aeb1e4'
 
 export const MINIMUM_LIQUIDITY = JSBI.BigInt(1000)
 
