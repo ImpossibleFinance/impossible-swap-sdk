@@ -414,10 +414,10 @@ export class Pair {
       liquidity = JSBI.subtract(sqrt(JSBI.multiply(tokenAmounts[0].raw, tokenAmounts[1].raw)), MINIMUM_LIQUIDITY)
     } else {
       const amount0 = JSBI.equal(this.reserve0.raw, ZERO)
-        ? JSBI.BigInt(Number.MAX_SAFE_INTEGER)
+        ? JSBI.exponentiate(TWO, JSBI.BigInt(255))
         : JSBI.divide(JSBI.multiply(tokenAmounts[0].raw, totalSupply.raw), this.reserve0.raw)
       const amount1 = JSBI.equal(this.reserve1.raw, ZERO)
-        ? JSBI.BigInt(Number.MAX_SAFE_INTEGER)
+        ? JSBI.exponentiate(TWO, JSBI.BigInt(255))
         : JSBI.divide(JSBI.multiply(tokenAmounts[1].raw, totalSupply.raw), this.reserve1.raw)
       liquidity = JSBI.lessThanOrEqual(amount0, amount1) ? amount0 : amount1
     }
