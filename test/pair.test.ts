@@ -235,7 +235,7 @@ describe('Pair', () => {
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
         let input: TokenAmount = new TokenAmount(DAI, elem.amount0)
-        let output: [TokenAmount, Pair] = new Pair(
+        let output: [TokenAmount, TokenAmount, Pair] = new Pair(
           new TokenAmount(DAI, elem.reserve0),
           new TokenAmount(USDC, elem.reserve1),
           false,
@@ -246,12 +246,12 @@ describe('Pair', () => {
         ).getOutputAmount(input)
         expect(checkBounds(output[0].raw, JSBI.BigInt(elem.amount1))).toBe(true)
 
-        expect(output[1].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
+        expect(output[2].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
         expect(
-          checkBounds(output[1].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(output[2].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(output[1].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(output[2].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
         ).toBe(true)
       })
     })
@@ -307,7 +307,7 @@ describe('Pair', () => {
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
         let input: TokenAmount = new TokenAmount(DAI, elem.amount0)
-        let output: [TokenAmount, Pair] = new Pair(
+        let output: [TokenAmount, TokenAmount, Pair] = new Pair(
           new TokenAmount(DAI, elem.reserve0),
           new TokenAmount(USDC, elem.reserve1),
           true,
@@ -319,12 +319,12 @@ describe('Pair', () => {
 
         expect(checkBounds(output[0].raw, JSBI.BigInt(elem.amount1))).toBe(true)
 
-        expect(output[1].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
+        expect(output[2].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
         expect(
-          checkBounds(output[1].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(output[2].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(output[1].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(output[2].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
         ).toBe(true)
       })
     })
@@ -380,7 +380,7 @@ describe('Pair', () => {
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
         let input: TokenAmount = new TokenAmount(DAI, elem.amount0)
-        let output: [TokenAmount, Pair] = new Pair(
+        let output: [TokenAmount, TokenAmount, Pair] = new Pair(
           new TokenAmount(DAI, elem.reserve0),
           new TokenAmount(USDC, elem.reserve1),
           true,
@@ -392,12 +392,12 @@ describe('Pair', () => {
 
         expect(checkBounds(output[0].raw, JSBI.BigInt(elem.amount1))).toBe(true)
 
-        expect(output[1].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
+        expect(output[2].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
         expect(
-          checkBounds(output[1].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(output[2].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(output[1].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(output[2].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
         ).toBe(true)
       })
     })

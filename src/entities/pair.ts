@@ -244,7 +244,7 @@ export class Pair {
     return token.equals(this.token0) ? this.reserve0 : this.reserve1
   }
 
-  public getOutputAmount(amountIn: TokenAmount): [TokenAmount, Pair] {
+  public getOutputAmount(amountIn: TokenAmount): [TokenAmount, TokenAmount, Pair] {
     invariant(this.involvesToken(amountIn.token), 'TOKEN')
     if (JSBI.equal(this.reserve0.raw, ZERO) && JSBI.equal(this.reserve1.raw, ZERO)) {
       throw new InsufficientReservesError()
@@ -312,7 +312,14 @@ export class Pair {
     }
 
     return [
-      amountOut,
+      new TokenAmount(
+        isMatch ? this.token1 : this.token0,
+        JSBI.add(
+          JSBI.greaterThan(lastSwapAmountOut, reserveOutJSBI) ? reserveOutJSBI : lastSwapAmountOut,
+          amountOutFirstTrade
+        )
+      ),
+      new TokenAmount(isMatch ? this.token1 : this.token0, JSBI.add(lastSwapAmountOut, amountOutFirstTrade)),
       new Pair(
         reserveOut.subtract(amountOut),
         reserveIn.add(amountIn),

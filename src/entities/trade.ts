@@ -1,6 +1,6 @@
 import invariant from 'tiny-invariant'
 
-import { ChainId, ONE, TradeType, ZERO } from '../constants'
+import { ChainId, ONE, TradeType, ZERO, _10000 } from '../constants'
 import { sortedInsert } from '../utils'
 import { Currency, ETHER } from './currency'
 import { CurrencyAmount } from './fractions/currencyAmount'
@@ -11,6 +11,7 @@ import { TokenAmount } from './fractions/tokenAmount'
 import { Pair } from './pair'
 import { Route } from './route'
 import { currencyEquals, Token, WETH } from './token'
+import JSBI from 'jsbi'
 
 /**
  * Returns the percent difference between the mid price and the execution price, i.e. price impact.
@@ -159,7 +160,7 @@ export class Trade {
       amounts[0] = wrappedAmount(amount, route.chainId)
       for (let i = 0; i < route.path.length - 1; i++) {
         const pair = route.pairs[i]
-        const [outputAmount, nextPair] = pair.getOutputAmount(amounts[i])
+        const [outputAmount, , nextPair] = pair.getOutputAmount(amounts[i])
         amounts[i + 1] = outputAmount
         nextPairs[i] = nextPair
       }
@@ -251,6 +252,7 @@ export class Trade {
     pairs: Pair[],
     currencyAmountIn: CurrencyAmount,
     currencyOut: Currency,
+    allowedSlippage: number,
     { maxNumResults = 3, maxHops = 3 }: BestTradeOptions = {},
     // used in recursion.
     currentPairs: Pair[] = [],
@@ -276,9 +278,9 @@ export class Trade {
       if (!pair.token0.equals(amountIn.token) && !pair.token1.equals(amountIn.token)) continue
       if (pair.reserve0.equalTo(ZERO) && pair.reserve1.equalTo(ZERO)) continue
 
-      let amountOut: TokenAmount
+      let amountOut: TokenAmount, optimalAmountOut: TokenAmount
       try {
-        ;[amountOut] = pair.getOutputAmount(amountIn)
+        ;[amountOut, optimalAmountOut] = pair.getOutputAmount(amountIn)
       } catch (error) {
         // input too low
         if (error.isInsufficientInputAmountError) {
@@ -286,34 +288,44 @@ export class Trade {
         }
         throw error
       }
-      // we have arrived at the output token, so this is the final trade of one of the paths
-      if (amountOut.token.equals(tokenOut)) {
-        sortedInsert(
-          bestTrades,
-          new Trade(
-            new Route([...currentPairs, pair], originalAmountIn.currency, currencyOut),
-            originalAmountIn,
-            TradeType.EXACT_INPUT
-          ),
-          maxNumResults,
-          tradeComparator
-        )
-      } else if (maxHops > 1 && pairs.length > 1) {
-        const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
 
-        // otherwise, consider all the other paths that lead from this token as long as we have not exceeded maxHops
-        Trade.bestTradeExactIn(
-          pairsExcludingThisPair,
-          amountOut,
-          currencyOut,
-          {
+      const rawOptimalAmountOut = optimalAmountOut.raw
+      const amountOutWithSlippage = JSBI.subtract(
+        rawOptimalAmountOut,
+        JSBI.divide(JSBI.multiply(rawOptimalAmountOut, JSBI.BigInt(allowedSlippage)), _10000)
+      )
+
+      // we have arrived at the output token, so this is the final trade of one of the paths
+      if (JSBI.lessThanOrEqual(amountOutWithSlippage, amountOut.raw)) {
+        if (amountOut.token.equals(tokenOut)) {
+          sortedInsert(
+            bestTrades,
+            new Trade(
+              new Route([...currentPairs, pair], originalAmountIn.currency, currencyOut),
+              originalAmountIn,
+              TradeType.EXACT_INPUT
+            ),
             maxNumResults,
-            maxHops: maxHops - 1
-          },
-          [...currentPairs, pair],
-          originalAmountIn,
-          bestTrades
-        )
+            tradeComparator
+          )
+        } else if (maxHops > 1 && pairs.length > 1) {
+          const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
+
+          // otherwise, consider all the other paths that lead from this token as long as we have not exceeded maxHops
+          Trade.bestTradeExactIn(
+            pairsExcludingThisPair,
+            amountOut,
+            currencyOut,
+            allowedSlippage,
+            {
+              maxNumResults,
+              maxHops: maxHops - 1
+            },
+            [...currentPairs, pair],
+            originalAmountIn,
+            bestTrades
+          )
+        }
       }
     }
 
