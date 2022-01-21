@@ -14,14 +14,6 @@ describe('miscellaneous', () => {
     expect(() => {
       pair.getLiquidityMinted(
         new TokenAmount(pair.liquidityToken, '0'),
-        new TokenAmount(tokenA, '1000'),
-        new TokenAmount(tokenB, '1000')
-      )
-    }).toThrow(InsufficientInputAmountError)
-
-    expect(() => {
-      pair.getLiquidityMinted(
-        new TokenAmount(pair.liquidityToken, '0'),
         new TokenAmount(tokenA, '1000000'),
         new TokenAmount(tokenB, '1')
       )
