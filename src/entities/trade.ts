@@ -133,6 +133,10 @@ export class Trade {
    * The percent difference between the mid price before the trade and the trade execution price.
    */
   public readonly priceImpact: Percent
+  /**
+   * The actual output amount possible based on balances in pairs
+   */
+  public readonly optimalAmountOut?: TokenAmount
 
   /**
    * Constructs an exact in trade with the given amount in and route
@@ -160,9 +164,10 @@ export class Trade {
       amounts[0] = wrappedAmount(amount, route.chainId)
       for (let i = 0; i < route.path.length - 1; i++) {
         const pair = route.pairs[i]
-        const [outputAmount, , nextPair] = pair.getOutputAmount(amounts[i])
-        amounts[i + 1] = outputAmount
+        const [outputAmount, optimalAmountOut, nextPair] = pair.getOutputAmount(amounts[i])
+        amounts[i + 1] = optimalAmountOut
         nextPairs[i] = nextPair
+        this.optimalAmountOut = outputAmount
       }
     } else {
       invariant(currencyEquals(amount.currency, route.output), 'OUTPUT')
