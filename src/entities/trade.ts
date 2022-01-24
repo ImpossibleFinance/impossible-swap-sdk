@@ -257,7 +257,7 @@ export class Trade {
     pairs: Pair[],
     currencyAmountIn: CurrencyAmount,
     currencyOut: Currency,
-    allowedSlippage: number,
+    amountDeviation: number,
     { maxNumResults = 3, maxHops = 3 }: BestTradeOptions = {},
     // used in recursion.
     currentPairs: Pair[] = [],
@@ -297,7 +297,7 @@ export class Trade {
       const rawOptimalAmountOut = optimalAmountOut.raw
       const amountOutWithSlippage = JSBI.subtract(
         rawOptimalAmountOut,
-        JSBI.divide(JSBI.multiply(rawOptimalAmountOut, JSBI.BigInt(allowedSlippage)), _10000)
+        JSBI.divide(JSBI.multiply(rawOptimalAmountOut, JSBI.BigInt(amountDeviation)), _10000)
       )
 
       // we have arrived at the output token, so this is the final trade of one of the paths
@@ -321,7 +321,7 @@ export class Trade {
             pairsExcludingThisPair,
             amountOut,
             currencyOut,
-            allowedSlippage,
+            amountDeviation,
             {
               maxNumResults,
               maxHops: maxHops - 1
