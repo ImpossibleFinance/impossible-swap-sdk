@@ -244,6 +244,11 @@ export class Pair {
     return token.equals(this.token0) ? this.reserve0 : this.reserve1
   }
 
+  /*
+    Returns 
+     1. amounts of output tokens in the ideal case (this value can exceed reserveOut)
+     2. amounts of output tokens that will be received from this trade (this value cannot exceed reserveOut)
+  */
   public getOutputAmount(amountIn: TokenAmount): [TokenAmount, TokenAmount, Pair] {
     invariant(this.involvesToken(amountIn.token), 'TOKEN')
     if (JSBI.equal(this.reserve0.raw, ZERO) && JSBI.equal(this.reserve1.raw, ZERO)) {
