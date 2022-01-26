@@ -247,6 +247,7 @@ export class Trade {
    * @param pairs the pairs to consider in finding the best trade
    * @param currencyAmountIn exact amount of input currency to spend
    * @param currencyOut the desired currency out
+   * @param amountDeviation the amount of deviation in basis points between max output amount and reserves of the pool. if within deviation, its a valid Trade to return
    * @param maxNumResults maximum number of results to return
    * @param maxHops maximum number of hops a returned trade can make, e.g. 1 hop goes through a single pair
    * @param currentPairs used in recursion; the current list of pairs
