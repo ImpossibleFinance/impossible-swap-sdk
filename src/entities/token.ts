@@ -70,5 +70,12 @@ export const WETH = {
     18,
     'WBNB',
     'Wrapped BNB'
+  ),
+  [ChainId.MOONRIVER]: new Token(
+    ChainId.MOONRIVER,
+    '0x98878b06940ae243284ca214f92bb71a2b032b8a',
+    18,
+    'WMOVR',
+    'Wrapper MORV'
   )
 }
