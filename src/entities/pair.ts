@@ -312,13 +312,7 @@ export class Pair {
     }
 
     return [
-      new TokenAmount(
-        isMatch ? this.token1 : this.token0,
-        JSBI.add(
-          JSBI.greaterThan(lastSwapAmountOut, reserveOutJSBI) ? reserveOutJSBI : lastSwapAmountOut,
-          amountOutFirstTrade
-        )
-      ),
+      amountOut,
       new TokenAmount(isMatch ? this.token1 : this.token0, JSBI.add(lastSwapAmountOut, amountOutFirstTrade)),
       new Pair(
         reserveOut.subtract(amountOut),
