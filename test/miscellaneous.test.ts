@@ -1,8 +1,8 @@
-import { ChainId, Token, TokenAmount, Pair, InsufficientInputAmountError } from '../src'
+import { ChainId, Token, TokenAmount, Pair, TradeState } from '../src'
 import { sortedInsert } from '../src/utils'
 
 const BasicPair = (a: TokenAmount, b: TokenAmount): Pair => {
-  return new Pair(a, b, false, 30, 1, 1)
+  return new Pair(a, b, false, 30, 1, 1, TradeState.SELL_ALL)
 }
 
 describe('miscellaneous', () => {
@@ -10,22 +10,6 @@ describe('miscellaneous', () => {
     const tokenA = new Token(ChainId.BSCTESTNET, '0x0000000000000000000000000000000000000001', 18)
     const tokenB = new Token(ChainId.BSCTESTNET, '0x0000000000000000000000000000000000000002', 18)
     const pair = BasicPair(new TokenAmount(tokenA, '0'), new TokenAmount(tokenB, '0'))
-
-    expect(() => {
-      pair.getLiquidityMinted(
-        new TokenAmount(pair.liquidityToken, '0'),
-        new TokenAmount(tokenA, '1000'),
-        new TokenAmount(tokenB, '1000')
-      )
-    }).toThrow(InsufficientInputAmountError)
-
-    expect(() => {
-      pair.getLiquidityMinted(
-        new TokenAmount(pair.liquidityToken, '0'),
-        new TokenAmount(tokenA, '1000000'),
-        new TokenAmount(tokenB, '1')
-      )
-    }).toThrow(InsufficientInputAmountError)
 
     const liquidity = pair.getLiquidityMinted(
       new TokenAmount(pair.liquidityToken, '0'),

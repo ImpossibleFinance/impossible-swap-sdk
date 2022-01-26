@@ -10,11 +10,12 @@ import {
   TokenAmount,
   Trade,
   TradeType,
-  WETH
+  WETH,
+  TradeState
 } from '../src'
 
 const BasicPair = (a: TokenAmount, b: TokenAmount): Pair => {
-  return new Pair(a, b, false, 30, 1, 1)
+  return new Pair(a, b, false, 30, 1, 1, TradeState.SELL_ALL)
 }
 
 describe('Trade', () => {
@@ -76,11 +77,11 @@ describe('Trade', () => {
 
   describe('#bestTradeExactIn', () => {
     it('throws with empty pairs', () => {
-      expect(() => Trade.bestTradeExactIn([], new TokenAmount(token0, JSBI.BigInt(100)), token2)).toThrow('PAIRS')
+      expect(() => Trade.bestTradeExactIn([], new TokenAmount(token0, JSBI.BigInt(100)), token2, 10)).toThrow('PAIRS')
     })
     it('throws with max hops of 0', () => {
       expect(() =>
-        Trade.bestTradeExactIn([pair_0_2], new TokenAmount(token0, JSBI.BigInt(100)), token2, { maxHops: 0 })
+        Trade.bestTradeExactIn([pair_0_2], new TokenAmount(token0, JSBI.BigInt(100)), token2, 10, { maxHops: 0 })
       ).toThrow('MAX_HOPS')
     })
 
@@ -88,7 +89,8 @@ describe('Trade', () => {
       const result = Trade.bestTradeExactIn(
         [pair_0_1, pair_0_2, pair_1_2],
         new TokenAmount(token0, JSBI.BigInt(100)),
-        token2
+        token2,
+        10
       )
       expect(result).toHaveLength(2)
       expect(result[0].route.pairs).toHaveLength(1) // 0 -> 2 at 10:11
@@ -102,9 +104,9 @@ describe('Trade', () => {
     })
 
     it('doesnt throw for zero liquidity pairs', () => {
-      expect(Trade.bestTradeExactIn([empty_pair_0_1], new TokenAmount(token0, JSBI.BigInt(100)), token1)).toHaveLength(
-        0
-      )
+      expect(
+        Trade.bestTradeExactIn([empty_pair_0_1], new TokenAmount(token0, JSBI.BigInt(100)), token1, 10)
+      ).toHaveLength(0)
     })
 
     it('respects maxHops', () => {
@@ -112,6 +114,7 @@ describe('Trade', () => {
         [pair_0_1, pair_0_2, pair_1_2],
         new TokenAmount(token0, JSBI.BigInt(10)),
         token2,
+        10,
         { maxHops: 1 }
       )
       expect(result).toHaveLength(1)
@@ -123,7 +126,8 @@ describe('Trade', () => {
       const result = Trade.bestTradeExactIn(
         [pair_0_1, pair_0_2, pair_1_2],
         new TokenAmount(token0, JSBI.BigInt(1)),
-        token2
+        token2,
+        10
       )
       expect(result).toHaveLength(1)
       expect(result[0].route.pairs).toHaveLength(1) // 0 -> 2 at 10:11
@@ -136,6 +140,7 @@ describe('Trade', () => {
         [pair_0_1, pair_0_2, pair_1_2],
         new TokenAmount(token0, JSBI.BigInt(10)),
         token2,
+        10,
         { maxNumResults: 1 }
       )
 
@@ -146,7 +151,8 @@ describe('Trade', () => {
       const result = Trade.bestTradeExactIn(
         [pair_0_1, pair_0_3, pair_1_3],
         new TokenAmount(token0, JSBI.BigInt(10)),
-        token2
+        token2,
+        10
       )
       expect(result).toHaveLength(0)
     })
@@ -155,7 +161,8 @@ describe('Trade', () => {
       const result = Trade.bestTradeExactIn(
         [pair_weth_0, pair_0_1, pair_0_3, pair_1_3],
         CurrencyAmount.ether(JSBI.BigInt(100)),
-        token3
+        token3,
+        10
       )
       expect(result).toHaveLength(2)
       expect(result[0].inputAmount.currency).toEqual(ETHER)
@@ -169,7 +176,8 @@ describe('Trade', () => {
       const result = Trade.bestTradeExactIn(
         [pair_weth_0, pair_0_1, pair_0_3, pair_1_3],
         new TokenAmount(token3, JSBI.BigInt(100)),
-        ETHER
+        ETHER,
+        10
       )
       expect(result).toHaveLength(2)
       expect(result[0].inputAmount.currency).toEqual(token3)

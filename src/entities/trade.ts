@@ -1,6 +1,6 @@
 import invariant from 'tiny-invariant'
 
-import { ChainId, ONE, TradeType, ZERO } from '../constants'
+import { ChainId, ONE, TradeType, ZERO, _10000 } from '../constants'
 import { sortedInsert } from '../utils'
 import { Currency, ETHER } from './currency'
 import { CurrencyAmount } from './fractions/currencyAmount'
@@ -11,6 +11,7 @@ import { TokenAmount } from './fractions/tokenAmount'
 import { Pair } from './pair'
 import { Route } from './route'
 import { currencyEquals, Token, WETH } from './token'
+import JSBI from 'jsbi'
 
 /**
  * Returns the percent difference between the mid price and the execution price, i.e. price impact.
@@ -132,6 +133,10 @@ export class Trade {
    * The percent difference between the mid price before the trade and the trade execution price.
    */
   public readonly priceImpact: Percent
+  /**
+   * The actual output amount possible based on balances in pairs
+   */
+  public readonly optimalAmountOut?: TokenAmount
 
   /**
    * Constructs an exact in trade with the given amount in and route
@@ -159,9 +164,10 @@ export class Trade {
       amounts[0] = wrappedAmount(amount, route.chainId)
       for (let i = 0; i < route.path.length - 1; i++) {
         const pair = route.pairs[i]
-        const [outputAmount, nextPair] = pair.getOutputAmount(amounts[i])
-        amounts[i + 1] = outputAmount
+        const [outputAmount, optimalAmountOut, nextPair] = pair.getOutputAmount(amounts[i])
+        amounts[i + 1] = optimalAmountOut
         nextPairs[i] = nextPair
+        this.optimalAmountOut = outputAmount
       }
     } else {
       invariant(currencyEquals(amount.currency, route.output), 'OUTPUT')
@@ -241,6 +247,7 @@ export class Trade {
    * @param pairs the pairs to consider in finding the best trade
    * @param currencyAmountIn exact amount of input currency to spend
    * @param currencyOut the desired currency out
+   * @param amountDeviation the amount of deviation in basis points between max output amount and reserves of the pool. if within deviation, its a valid Trade to return
    * @param maxNumResults maximum number of results to return
    * @param maxHops maximum number of hops a returned trade can make, e.g. 1 hop goes through a single pair
    * @param currentPairs used in recursion; the current list of pairs
@@ -251,6 +258,7 @@ export class Trade {
     pairs: Pair[],
     currencyAmountIn: CurrencyAmount,
     currencyOut: Currency,
+    amountDeviation: number,
     { maxNumResults = 3, maxHops = 3 }: BestTradeOptions = {},
     // used in recursion.
     currentPairs: Pair[] = [],
@@ -274,11 +282,11 @@ export class Trade {
       const pair = pairs[i]
       // pair irrelevant
       if (!pair.token0.equals(amountIn.token) && !pair.token1.equals(amountIn.token)) continue
-      if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
+      if (pair.reserve0.equalTo(ZERO) && pair.reserve1.equalTo(ZERO)) continue
 
-      let amountOut: TokenAmount
+      let amountOut: TokenAmount, optimalAmountOut: TokenAmount
       try {
-        ;[amountOut] = pair.getOutputAmount(amountIn)
+        ;[amountOut, optimalAmountOut] = pair.getOutputAmount(amountIn)
       } catch (error) {
         // input too low
         if (error.isInsufficientInputAmountError) {
@@ -286,34 +294,44 @@ export class Trade {
         }
         throw error
       }
-      // we have arrived at the output token, so this is the final trade of one of the paths
-      if (amountOut.token.equals(tokenOut)) {
-        sortedInsert(
-          bestTrades,
-          new Trade(
-            new Route([...currentPairs, pair], originalAmountIn.currency, currencyOut),
-            originalAmountIn,
-            TradeType.EXACT_INPUT
-          ),
-          maxNumResults,
-          tradeComparator
-        )
-      } else if (maxHops > 1 && pairs.length > 1) {
-        const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
 
-        // otherwise, consider all the other paths that lead from this token as long as we have not exceeded maxHops
-        Trade.bestTradeExactIn(
-          pairsExcludingThisPair,
-          amountOut,
-          currencyOut,
-          {
+      const rawOptimalAmountOut = optimalAmountOut.raw
+      const amountOutWithSlippage = JSBI.subtract(
+        rawOptimalAmountOut,
+        JSBI.divide(JSBI.multiply(rawOptimalAmountOut, JSBI.BigInt(amountDeviation)), _10000)
+      )
+
+      // we have arrived at the output token, so this is the final trade of one of the paths
+      if (JSBI.lessThanOrEqual(amountOutWithSlippage, amountOut.raw)) {
+        if (amountOut.token.equals(tokenOut)) {
+          sortedInsert(
+            bestTrades,
+            new Trade(
+              new Route([...currentPairs, pair], originalAmountIn.currency, currencyOut),
+              originalAmountIn,
+              TradeType.EXACT_INPUT
+            ),
             maxNumResults,
-            maxHops: maxHops - 1
-          },
-          [...currentPairs, pair],
-          originalAmountIn,
-          bestTrades
-        )
+            tradeComparator
+          )
+        } else if (maxHops > 1 && pairs.length > 1) {
+          const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
+
+          // otherwise, consider all the other paths that lead from this token as long as we have not exceeded maxHops
+          Trade.bestTradeExactIn(
+            pairsExcludingThisPair,
+            amountOut,
+            currencyOut,
+            amountDeviation,
+            {
+              maxNumResults,
+              maxHops: maxHops - 1
+            },
+            [...currentPairs, pair],
+            originalAmountIn,
+            bestTrades
+          )
+        }
       }
     }
 
@@ -362,7 +380,7 @@ export class Trade {
       const pair = pairs[i]
       // pair irrelevant
       if (!pair.token0.equals(amountOut.token) && !pair.token1.equals(amountOut.token)) continue
-      if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
+      if (pair.reserve0.equalTo(ZERO) && pair.reserve1.equalTo(ZERO)) continue
 
       let amountIn: TokenAmount
       try {

@@ -16,10 +16,11 @@ import {
   FIVE,
   EIGHT,
   _10000,
-  ChainId
+  ChainId,
+  TradeState
 } from '../constants'
 import { sqrt, parseBigintIsh } from '../utils'
-import { InsufficientReservesError, InsufficientInputAmountError } from '../errors'
+import { InsufficientReservesError, InsufficientInputAmountError, TradeNotSupportedError } from '../errors'
 import { Token } from './token'
 
 let PAIR_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: string } } = {}
@@ -30,7 +31,8 @@ export class Pair {
   public readonly fee: number
   public readonly boost0: number
   public readonly boost1: number
-  public readonly SqrtK: JSBI
+  public readonly sqrtK: JSBI
+  public readonly tradeState: TradeState
 
   private readonly tokenAmounts: [TokenAmount, TokenAmount]
 
@@ -60,8 +62,12 @@ export class Pair {
     isXybk: Boolean,
     fee: number,
     boost0: number,
-    boost1: number
+    boost1: number,
+    tradeState: TradeState
   ) {
+    invariant(boost0 >= 1 && boost1 >= 1, 'INVALID_BOOST')
+    invariant(fee >= 0 && fee <= 10000, 'INVALID_FEE')
+
     const tokenAmounts = tokenAmountA.token.sortsBefore(tokenAmountB.token) // does safety checks
       ? [tokenAmountA, tokenAmountB]
       : [tokenAmountB, tokenAmountA]
@@ -70,47 +76,47 @@ export class Pair {
       Pair.getAddress(tokenAmounts[0].token, tokenAmounts[1].token),
       18,
       'IF-LP',
-      'Impossible Swap LPs'
+      `Impossible Swap LPs: ${tokenAmounts[0].token.symbol}/${tokenAmounts[1].token.symbol}`
     )
     this.tokenAmounts = tokenAmounts as [TokenAmount, TokenAmount]
     this.isXybk = isXybk
     this.fee = fee
     this.boost0 = boost0
     this.boost1 = boost1
-    this.SqrtK = this.computeXybkSqrtK(boost0, boost1)
+    this.sqrtK = this.computeXybkSqrtK(boost0, boost1)
+    this.tradeState = tradeState
   }
 
   /**
    * Calculates xybk SqrtK from reserve0, reserve1
    */
   private computeXybkSqrtK(b0: number, b1: number): JSBI {
-    let boost: number = JSBI.greaterThan(this.tokenAmounts[0].raw, this.tokenAmounts[1].raw) ? b0 : b1
-    if (boost === 1) {
-      return ONE
-    }
+    let boost: JSBI = JSBI.BigInt(
+      JSBI.greaterThan(this.tokenAmounts[0].raw, this.tokenAmounts[1].raw) ? b0 - 1 : b1 - 1
+    )
 
-    const multiplier: JSBI = JSBI.BigInt(10000000000)
-    const amount0: JSBI = JSBI.multiply(this.tokenAmounts[0].raw, multiplier)
-    const amount1: JSBI = JSBI.multiply(this.tokenAmounts[1].raw, multiplier)
+    let denom: JSBI = JSBI.add(JSBI.multiply(boost, TWO), ONE)
 
     let term: JSBI = JSBI.divide(
-      JSBI.multiply(JSBI.BigInt(boost - 1), JSBI.add(amount0, amount1)),
-      JSBI.BigInt(boost * 4 - 2)
+      JSBI.multiply(boost, JSBI.add(this.tokenAmounts[0].raw, this.tokenAmounts[1].raw)),
+      JSBI.multiply(denom, TWO)
     )
 
     let result: JSBI = JSBI.add(
-      JSBI.divide(JSBI.multiply(amount0, amount1), JSBI.BigInt(boost * 2 - 1)),
-      JSBI.exponentiate(term, TWO)
+      JSBI.exponentiate(term, TWO),
+      JSBI.divide(JSBI.multiply(this.tokenAmounts[0].raw, this.tokenAmounts[1].raw), denom)
     )
 
-    return JSBI.divide(JSBI.add(this.sqrt(result), JSBI.BigInt(term)), multiplier)
+    return JSBI.add(this.sqrt(result), term)
   }
 
   /**
    * Returns artificial liquidity term [(boost-1)*SqrtK] to be added to real reserves for xybk invariant
    */
+
+  // TODO: probably can make private
   public artiLiquidityTerm(boost: number): JSBI {
-    return JSBI.multiply(JSBI.BigInt(boost - 1), this.SqrtK)
+    return JSBI.multiply(JSBI.BigInt(boost - 1), this.sqrtK)
   }
 
   public getBoost(): number {
@@ -145,7 +151,7 @@ export class Pair {
   }
 
   /**
-   * Returns the price of token 0 in token 1
+   * Returns the instantaneous  price of token 0 in token 1 (could be xybk)
    */
   public get token0Price(): Price {
     if (this.isXybk) {
@@ -169,7 +175,7 @@ export class Pair {
   }
 
   /**
-   * Returns the current mid price of the pair in terms of token1, i.e. the ratio of reserve0 to reserve1
+   * Returns the instantaneous price of token 1 in token 0 (could be xybk)
    */
   public get token1Price(): Price {
     if (this.isXybk) {
@@ -186,7 +192,7 @@ export class Pair {
   }
 
   /**
-   * Returns the uni prices of token 0 in token 1
+   * Returns the uni prices of token 1 in token 0
    */
   public get token1LpPrice(): Price {
     return new Price(this.token1, this.token0, this.tokenAmounts[1].raw, this.tokenAmounts[0].raw)
@@ -238,144 +244,159 @@ export class Pair {
     return token.equals(this.token0) ? this.reserve0 : this.reserve1
   }
 
-  public getOutputAmount(inputAmount: TokenAmount): [TokenAmount, Pair] {
-    invariant(this.involvesToken(inputAmount.token), 'TOKEN')
-    if (JSBI.equal(this.reserve0.raw, ZERO) || JSBI.equal(this.reserve1.raw, ZERO)) {
+  /*
+    Returns 
+     1. amounts of output tokens in the ideal case (this value can exceed reserveOut)
+     2. amounts of output tokens that will be received from this trade (this value cannot exceed reserveOut)
+  */
+  public getOutputAmount(amountIn: TokenAmount): [TokenAmount, TokenAmount, Pair] {
+    invariant(this.involvesToken(amountIn.token), 'TOKEN')
+    if (JSBI.equal(this.reserve0.raw, ZERO) && JSBI.equal(this.reserve1.raw, ZERO)) {
       throw new InsufficientReservesError()
     }
-    let inputReserve: TokenAmount = this.reserveOf(inputAmount.token)
-    let outputReserve: TokenAmount = this.reserveOf(inputAmount.token.equals(this.token0) ? this.token1 : this.token0)
 
-    let outputReserveJSBI: JSBI = outputReserve.raw
-    let inputReserveJSBI: JSBI = inputReserve.raw
+    let isMatch: boolean = amountIn.token.equals(this.token0)
 
-    let outputAmountJSBI: JSBI = JSBI.BigInt(0)
-    let inputAmountWithFee = JSBI.multiply(inputAmount.raw, JSBI.BigInt(10000 - this.fee))
+    // Trade occurs with 0 output if trades arent not allowed
+    if (
+      (this.tradeState === TradeState.SELL_TOKEN_0 && isMatch) ||
+      (this.tradeState === TradeState.SELL_TOKEN_1 && !isMatch) ||
+      this.tradeState === TradeState.SELL_NONE
+    ) {
+      throw new TradeNotSupportedError()
+    }
 
-    const isMatch: Boolean = inputAmount.token.equals(this.token0)
+    let reserveIn: TokenAmount = this.reserveOf(amountIn.token)
+    let reserveOut: TokenAmount = this.reserveOf(isMatch ? this.token1 : this.token0)
+
+    let reserveInJSBI: JSBI = reserveIn.raw
+    let reserveOutJSBI: JSBI = reserveOut.raw
+
+    let amountInPostFee = JSBI.multiply(amountIn.raw, JSBI.BigInt(10000 - this.fee))
+
+    let term: JSBI = ZERO
+    let amountOutFirstTrade: JSBI = ZERO
+
     if (this.isXybk) {
-      // If inputAmountWithFee + 10000*reserveIn >= SqrtK*10000
       if (
-        JSBI.greaterThan(
-          JSBI.add(inputAmountWithFee, JSBI.multiply(inputReserveJSBI, _10000)),
-          JSBI.multiply(this.SqrtK, _10000)
+        JSBI.greaterThanOrEqual(
+          JSBI.add(amountInPostFee, JSBI.multiply(reserveInJSBI, _10000)),
+          JSBI.multiply(this.sqrtK, _10000)
         )
       ) {
-        // If balance started from <SqrtK and ended at >SqrtK and boosts are different, there'll be different amountIn/Out
-        // Don't need to check in other case for reserveIn < reserveIn.add(x) <= SqrtK since that case doesnt cross midpt
-        if (this.boost0 !== this.boost1 && JSBI.greaterThan(this.SqrtK, inputReserveJSBI)) {
-          outputAmountJSBI = JSBI.subtract(outputReserveJSBI, this.SqrtK)
-          let diff: TokenAmount = new TokenAmount(inputAmount.token, JSBI.subtract(this.SqrtK, inputReserveJSBI))
-          inputAmountWithFee = JSBI.subtract(inputAmountWithFee, JSBI.multiply(diff.raw, _10000)) // This is multiplied by 10k
-          inputAmount.add(diff)
-          inputReserve.add(diff)
-          // If tokenIn = token0, balanceIn > sqrtK => balance0>sqrtK, use boost0
-          let term: JSBI = this.artiLiquidityTerm(isMatch ? this.boost0 : this.boost1)
-          outputReserveJSBI = JSBI.add(this.SqrtK, term)
-          inputReserveJSBI = JSBI.add(this.SqrtK, term) // Does this work?
-        } else {
-          // If tokenIn = token0, balanceIn > sqrtK => balance0>sqrtK, use boost0
-          let term: JSBI = this.artiLiquidityTerm(isMatch ? this.boost0 : this.boost1)
-          inputReserveJSBI = JSBI.add(inputReserveJSBI, term)
-          outputReserveJSBI = JSBI.add(outputReserveJSBI, term)
+        term = this.artiLiquidityTerm(isMatch ? this.boost0 : this.boost1)
+
+        if (JSBI.greaterThan(this.sqrtK, reserveInJSBI) && this.boost0 !== this.boost1) {
+          amountOutFirstTrade = JSBI.subtract(reserveOutJSBI, this.sqrtK)
+          amountInPostFee = JSBI.subtract(
+            amountInPostFee,
+            JSBI.multiply(JSBI.subtract(this.sqrtK, reserveInJSBI), _10000)
+          )
+          reserveInJSBI = this.sqrtK
+          reserveOutJSBI = this.sqrtK
         }
       } else {
-        // If tokenIn = token0, balanceIn < sqrtK => balance0<sqrtK, use boost1
-        let term: JSBI = this.artiLiquidityTerm(isMatch ? this.boost1 : this.boost0)
-        inputReserveJSBI = JSBI.add(inputReserveJSBI, term)
-        outputReserveJSBI = JSBI.add(outputReserveJSBI, term)
+        term = this.artiLiquidityTerm(isMatch ? this.boost1 : this.boost0)
       }
     }
-    const numerator = JSBI.multiply(inputAmountWithFee, outputReserveJSBI)
-    const denominator = JSBI.add(JSBI.multiply(inputReserveJSBI, _10000), inputAmountWithFee)
-    const outputVal = JSBI.add(outputAmountJSBI, JSBI.divide(numerator, denominator))
 
-    const outputAmount = new TokenAmount(
-      inputAmount.token.equals(this.token0) ? this.token1 : this.token0,
-      JSBI.greaterThan(outputReserve.raw, outputVal) ? outputVal : outputReserve.raw
+    const numerator = JSBI.multiply(amountInPostFee, JSBI.add(reserveOutJSBI, term))
+    const denominator = JSBI.add(JSBI.multiply(JSBI.add(reserveInJSBI, term), _10000), amountInPostFee)
+    const lastSwapAmountOut = JSBI.divide(numerator, denominator)
+
+    const amountOut = new TokenAmount(
+      isMatch ? this.token1 : this.token0,
+      JSBI.add(
+        JSBI.greaterThan(lastSwapAmountOut, reserveOutJSBI) ? reserveOutJSBI : lastSwapAmountOut,
+        amountOutFirstTrade
+      )
     )
 
-    if (JSBI.equal(outputAmount.raw, ZERO)) {
+    if (JSBI.equal(amountOut.raw, ZERO)) {
       throw new InsufficientInputAmountError()
     }
+
     return [
-      outputAmount,
+      amountOut,
+      new TokenAmount(isMatch ? this.token1 : this.token0, JSBI.add(lastSwapAmountOut, amountOutFirstTrade)),
       new Pair(
-        inputReserve.add(inputAmount),
-        outputReserve.subtract(outputAmount),
+        reserveOut.subtract(amountOut),
+        reserveIn.add(amountIn),
         this.isXybk,
         this.fee,
         this.boost0,
-        this.boost1
+        this.boost1,
+        this.tradeState
       )
     ]
   }
 
-  public getInputAmount(outputAmount: TokenAmount): [TokenAmount, Pair] {
-    invariant(this.involvesToken(outputAmount.token), 'TOKEN')
+  public getInputAmount(amountOut: TokenAmount): [TokenAmount, Pair] {
+    invariant(this.involvesToken(amountOut.token), 'TOKEN')
+
+    const isMatch: Boolean = amountOut.token.equals(this.token1) // Standardize with router
+
+    // Trade occurs with 0 output if trades arent not allowed
     if (
-      JSBI.equal(this.reserve0.raw, ZERO) ||
-      JSBI.equal(this.reserve1.raw, ZERO) ||
-      JSBI.greaterThanOrEqual(outputAmount.raw, this.reserveOf(outputAmount.token).raw)
+      (this.tradeState === TradeState.SELL_TOKEN_0 && isMatch) ||
+      (this.tradeState === TradeState.SELL_TOKEN_1 && !isMatch) ||
+      this.tradeState === TradeState.SELL_NONE
+    ) {
+      throw new TradeNotSupportedError()
+    }
+
+    const reserveOut: TokenAmount = this.reserveOf(amountOut.token)
+    const reserveIn: TokenAmount = this.reserveOf(isMatch ? this.token0 : this.token1)
+
+    let reserveOutJSBI: JSBI = reserveOut.raw
+    let reserveInJSBI: JSBI = reserveIn.raw
+
+    let term: JSBI = ZERO
+    let amountInFirstTrade: JSBI = ZERO
+    let amountOutJSBI: JSBI = amountOut.raw
+
+    if (
+      (JSBI.equal(this.reserve0.raw, ZERO) && JSBI.equal(this.reserve1.raw, ZERO)) ||
+      JSBI.greaterThan(amountOutJSBI, reserveOutJSBI)
     ) {
       throw new InsufficientReservesError()
     }
 
-    let outputReserve: TokenAmount = this.reserveOf(outputAmount.token)
-    const inputReserve: TokenAmount = this.reserveOf(outputAmount.token.equals(this.token0) ? this.token1 : this.token0)
-
-    let outputReserveJSBI: JSBI = outputReserve.raw
-    let inputReserveJSBI: JSBI = inputReserve.raw
-
-    const isMatch: Boolean = outputAmount.token.equals(this.token0)
-    let inputAmountJSBI: JSBI = JSBI.BigInt(0)
     if (this.isXybk) {
-      // If reserveOut - amountOut >= SqrtK
-      if (JSBI.greaterThan(JSBI.subtract(outputReserveJSBI, outputAmount.raw), this.SqrtK)) {
-        // If tokenOut == token0, balanceOut > sqrtK => balance1>sqrtK, use boost1
-        let term: JSBI = this.artiLiquidityTerm(isMatch ? this.boost0 : this.boost1)
-        inputReserveJSBI = JSBI.add(inputReserveJSBI, term)
-        outputReserveJSBI = JSBI.add(outputReserveJSBI, term)
+      if (JSBI.greaterThanOrEqual(reserveOutJSBI, JSBI.add(amountOut.raw, this.sqrtK))) {
+        term = this.artiLiquidityTerm(isMatch ? this.boost1 : this.boost0)
       } else {
-        // If balance started from <SqrtK and ended at >SqrtK and boosts are different, there'll be different amountIn/Out
-        // Don't need to check in other case for reserveOut > reserveOut.sub(x) >= sqrtK since that case doesnt cross midpt
-        if (this.boost0 !== this.boost1 && JSBI.greaterThan(outputReserveJSBI, this.SqrtK)) {
-          // Break into 2 trades => start point -> midpoint (SqrtK, SqrtK), then midpoint -> final point
-          let diff: TokenAmount = new TokenAmount(outputAmount.token, JSBI.subtract(outputReserveJSBI, this.SqrtK))
-          outputAmount = outputAmount.subtract(diff)
-          outputReserve = outputReserve.subtract(diff)
-          outputReserveJSBI = JSBI.subtract(outputReserveJSBI, diff.raw)
-          inputAmountJSBI = JSBI.divide(
-            JSBI.multiply(JSBI.subtract(this.SqrtK, inputReserveJSBI), _10000),
-            JSBI.BigInt(10000 - this.fee)
-          )
-          // If tokenOut = token0, balanceOut < sqrtK => balance0<sqrtK, use boost1
-          let term: JSBI = this.artiLiquidityTerm(isMatch ? this.boost1 : this.boost0)
-          outputReserveJSBI = JSBI.add(this.SqrtK, term)
-          inputReserveJSBI = JSBI.add(this.SqrtK, term) // Does this work?
-        } else {
-          // If tokenOut = token0, balanceOut < sqrtK => balance0<sqrtK, use boost1
-          let term: JSBI = this.artiLiquidityTerm(isMatch ? this.boost1 : this.boost0)
-          inputReserveJSBI = JSBI.add(inputReserveJSBI, term)
-          outputReserveJSBI = JSBI.add(outputReserveJSBI, term)
+        term = this.artiLiquidityTerm(isMatch ? this.boost0 : this.boost1)
+        if (this.boost0 !== this.boost1 && JSBI.greaterThan(reserveOutJSBI, this.sqrtK)) {
+          amountInFirstTrade = JSBI.multiply(JSBI.subtract(this.sqrtK, reserveInJSBI), _10000)
+          amountOutJSBI = JSBI.subtract(amountOutJSBI, JSBI.subtract(reserveOutJSBI, this.sqrtK))
+          reserveInJSBI = this.sqrtK
+          reserveOutJSBI = this.sqrtK
         }
       }
     }
-    const numerator = JSBI.multiply(JSBI.multiply(inputReserveJSBI, outputAmount.raw), _10000)
-    const denominator = JSBI.multiply(JSBI.subtract(outputReserveJSBI, outputAmount.raw), JSBI.BigInt(10000 - this.fee))
+
+    const numerator = JSBI.multiply(JSBI.add(reserveInJSBI, term), JSBI.multiply(amountOutJSBI, _10000))
+    const denominator = JSBI.subtract(JSBI.add(reserveOutJSBI, term), amountOutJSBI)
+
     const inputAmount = new TokenAmount(
-      outputAmount.token.equals(this.token0) ? this.token1 : this.token0,
-      JSBI.add(inputAmountJSBI, JSBI.add(JSBI.divide(numerator, denominator), ONE))
+      isMatch ? this.token0 : this.token1,
+      JSBI.add(
+        JSBI.divide(JSBI.add(amountInFirstTrade, JSBI.divide(numerator, denominator)), JSBI.BigInt(10000 - this.fee)),
+        ONE
+      )
     )
+
     return [
       inputAmount,
       new Pair(
-        inputReserve.add(inputAmount),
-        outputReserve.subtract(outputAmount),
+        reserveIn.add(inputAmount),
+        reserveOut.subtract(amountOut),
         this.isXybk,
         this.fee,
         this.boost0,
-        this.boost1
+        this.boost1,
+        this.tradeState
       )
     ]
   }
@@ -398,13 +419,17 @@ export class Pair {
     if (JSBI.equal(totalSupply.raw, ZERO)) {
       liquidity = JSBI.subtract(sqrt(JSBI.multiply(tokenAmounts[0].raw, tokenAmounts[1].raw)), MINIMUM_LIQUIDITY)
     } else {
-      const amount0 = JSBI.divide(JSBI.multiply(tokenAmounts[0].raw, totalSupply.raw), this.reserve0.raw)
-      const amount1 = JSBI.divide(JSBI.multiply(tokenAmounts[1].raw, totalSupply.raw), this.reserve1.raw)
+      const amount0 = JSBI.equal(this.reserve0.raw, ZERO)
+        ? JSBI.exponentiate(TWO, JSBI.BigInt(255))
+        : JSBI.divide(JSBI.multiply(tokenAmounts[0].raw, totalSupply.raw), this.reserve0.raw)
+      const amount1 = JSBI.equal(this.reserve1.raw, ZERO)
+        ? JSBI.exponentiate(TWO, JSBI.BigInt(255))
+        : JSBI.divide(JSBI.multiply(tokenAmounts[1].raw, totalSupply.raw), this.reserve1.raw)
       liquidity = JSBI.lessThanOrEqual(amount0, amount1) ? amount0 : amount1
     }
-    if (!JSBI.greaterThan(liquidity, ZERO)) {
-      throw new InsufficientInputAmountError()
-    }
+    // if (!JSBI.greaterThan(liquidity, ZERO)) {
+    //   throw new InsufficientInputAmountError()
+    // }
     return new TokenAmount(this.liquidityToken, liquidity)
   }
 

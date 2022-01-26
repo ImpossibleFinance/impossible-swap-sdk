@@ -1,5 +1,5 @@
 import invariant from 'tiny-invariant'
-import { ChainId, WETH as _WETH, TradeType, Rounding, Token, TokenAmount, Pair, Route, Trade } from '../src'
+import { ChainId, WETH as _WETH, TradeType, TradeState, Rounding, Token, TokenAmount, Pair, Route, Trade } from '../src'
 
 const ADDRESSES = [
   '0x0000000000000000000000000000000000000001',
@@ -19,7 +19,7 @@ function decimalize(amount: number, decimals: number): bigint {
 }
 
 const BasicPair = (a: TokenAmount, b: TokenAmount): Pair => {
-  return new Pair(a, b, false, 30, 1, 1)
+  return new Pair(a, b, false, 30, 1, 1, TradeState.SELL_ALL)
 }
 
 describe('entities', () => {
