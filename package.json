@@ -1,7 +1,7 @@
 {
   "name": "@impossiblefinance/sdk-v2",
   "license": "MIT",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "🛠 An SDK for building applications on top of impossible finance.",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
