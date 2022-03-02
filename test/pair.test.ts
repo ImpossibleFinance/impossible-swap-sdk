@@ -1,10 +1,10 @@
 // TODO: maximum amount transfer - take from bounds + hardstops
 
-import { ChainId, Token, Pair, TokenAmount, WETH, Price } from '../src'
+import { ChainId, Token, Pair, TokenAmount, WETH, Price, TradeState } from '../src'
 import JSBI from 'jsbi'
 
 const BasicPair = (a: TokenAmount, b: TokenAmount): Pair => {
-  return new Pair(a, b, false, 30, 1, 1)
+  return new Pair(a, b, false, 30, 1, 1, TradeState.SELL_ALL)
 }
 
 describe('Pair', () => {
@@ -21,7 +21,7 @@ describe('Pair', () => {
 
   describe('#getAddress', () => {
     it('returns the correct address', () => {
-      expect(Pair.getAddress(USDC, DAI)).toEqual('0xFdf24672316ff273E9341CbAd9586c74472Ea49E')
+      expect(Pair.getAddress(USDC, DAI)).toEqual('0x6c599904Fce4D5c0dd66c80E49Cc87b24A07D0bA')
     })
   })
 
@@ -169,7 +169,15 @@ describe('Pair', () => {
     it('should be within +- 5wei', () => {
       amounts.forEach(a => {
         boosts.forEach(b => {
-          const result: JSBI = new Pair(new TokenAmount(USDC, a), new TokenAmount(DAI, a), true, 30, b, b).SqrtK
+          const result: JSBI = new Pair(
+            new TokenAmount(USDC, a),
+            new TokenAmount(DAI, a),
+            true,
+            30,
+            b,
+            b,
+            TradeState.SELL_ALL
+          ).sqrtK
           expect(checkBounds(result, JSBI.BigInt(a))).toBe(true)
         })
       })
@@ -187,7 +195,15 @@ describe('Pair', () => {
     ]
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
-        let result: JSBI = new Pair(new TokenAmount(USDC, elem.a), new TokenAmount(DAI, elem.b), true, 30, 10, 10).SqrtK
+        let result: JSBI = new Pair(
+          new TokenAmount(USDC, elem.a),
+          new TokenAmount(DAI, elem.b),
+          true,
+          30,
+          10,
+          10,
+          TradeState.SELL_ALL
+        ).sqrtK
         expect(checkBounds(result, JSBI.BigInt(elem.sqrtK))).toBe(true)
       })
     })
@@ -219,22 +235,23 @@ describe('Pair', () => {
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
         let input: TokenAmount = new TokenAmount(DAI, elem.amount0)
-        let output: [TokenAmount, Pair] = new Pair(
+        let output: [TokenAmount, TokenAmount, Pair] = new Pair(
           new TokenAmount(DAI, elem.reserve0),
           new TokenAmount(USDC, elem.reserve1),
           false,
           30,
           1,
-          1
+          1,
+          TradeState.SELL_ALL
         ).getOutputAmount(input)
         expect(checkBounds(output[0].raw, JSBI.BigInt(elem.amount1))).toBe(true)
 
-        expect(output[1].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
+        expect(output[2].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
         expect(
-          checkBounds(output[1].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(output[2].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(output[1].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(output[2].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
         ).toBe(true)
       })
     })
@@ -248,7 +265,8 @@ describe('Pair', () => {
           false,
           30,
           1,
-          1
+          1,
+          TradeState.SELL_ALL
         ).getInputAmount(output)
 
         expect(checkBounds(input[0].raw, JSBI.BigInt(elem.amount0))).toBe(true)
@@ -289,23 +307,24 @@ describe('Pair', () => {
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
         let input: TokenAmount = new TokenAmount(DAI, elem.amount0)
-        let output: [TokenAmount, Pair] = new Pair(
+        let output: [TokenAmount, TokenAmount, Pair] = new Pair(
           new TokenAmount(DAI, elem.reserve0),
           new TokenAmount(USDC, elem.reserve1),
           true,
           30,
           10,
-          10
+          10,
+          TradeState.SELL_ALL
         ).getOutputAmount(input)
 
         expect(checkBounds(output[0].raw, JSBI.BigInt(elem.amount1))).toBe(true)
 
-        expect(output[1].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
+        expect(output[2].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
         expect(
-          checkBounds(output[1].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(output[2].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(output[1].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(output[2].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
         ).toBe(true)
       })
     })
@@ -319,7 +338,8 @@ describe('Pair', () => {
           true,
           30,
           10,
-          10
+          10,
+          TradeState.SELL_ALL
         ).getInputAmount(output)
 
         expect(checkBounds(input[0].raw, JSBI.BigInt(elem.amount0))).toBe(true)
@@ -360,23 +380,24 @@ describe('Pair', () => {
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
         let input: TokenAmount = new TokenAmount(DAI, elem.amount0)
-        let output: [TokenAmount, Pair] = new Pair(
+        let output: [TokenAmount, TokenAmount, Pair] = new Pair(
           new TokenAmount(DAI, elem.reserve0),
           new TokenAmount(USDC, elem.reserve1),
           true,
           30,
           28,
-          11
+          11,
+          TradeState.SELL_ALL
         ).getOutputAmount(input)
 
         expect(checkBounds(output[0].raw, JSBI.BigInt(elem.amount1))).toBe(true)
 
-        expect(output[1].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
+        expect(output[2].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
         expect(
-          checkBounds(output[1].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(output[2].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(output[1].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(output[2].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
         ).toBe(true)
       })
     })
@@ -390,7 +411,8 @@ describe('Pair', () => {
           true,
           30,
           28,
-          11
+          11,
+          TradeState.SELL_ALL
         ).getInputAmount(output)
 
         expect(checkBounds(input[0].raw, JSBI.BigInt(elem.amount0))).toBe(true)

@@ -6,7 +6,7 @@ import { Pair } from './entities/pair'
 import IPancakePair from '@pancakeswap-libs/pancake-swap-core/build/IPancakePair.json'
 import invariant from 'tiny-invariant'
 import ERC20 from './abis/ERC20.json'
-import { ChainId } from './constants'
+import { ChainId, TradeState } from './constants'
 import { Token } from './entities/token'
 
 let TOKEN_DECIMALS_CACHE: { [chainId: number]: { [address: string]: number } } = {
@@ -84,7 +84,8 @@ export abstract class Fetcher {
       isXybk,
       fee,
       boost0,
-      boost1
+      boost1,
+      TradeState.SELL_ALL
     )
   }
 }
