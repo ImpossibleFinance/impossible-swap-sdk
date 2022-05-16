@@ -11,13 +11,13 @@ To run the tests, follow these steps. You must have at least node v10 and [yarn]
 First clone the repository:
 
 ```sh
-git clone https://github.com/pancakeswap/pancakeswap-sdk.git
+git clone https://github.com/ImpossibleFinance/impossible-swap-sdk.git
 ```
 
-Move into the pancakeswap-sdk working directory
+Move into the impossibleswap-sdk working directory
 
 ```sh
-cd pancakeswap-sdk/
+cd impossiblswap-sdk/
 ```
 
 Install dependencies
