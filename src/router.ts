@@ -1,7 +1,7 @@
-import { TradeType } from './constants'
 import invariant from 'tiny-invariant'
 import { validateAndParseAddress } from './utils'
-import { CurrencyAmount, ETHER, Percent, Trade } from './entities'
+import { Trade } from './entities'
+import { Currency, CurrencyAmount, Percent, TradeType } from '@uniswap/sdk-core'
 
 /**
  * Options for producing the arguments to send call to the router.
@@ -28,6 +28,14 @@ export interface TradeOptions {
   feeOnTransfer?: boolean
 }
 
+export interface TradeOptionsDeadline extends Omit<TradeOptions, 'ttl'> {
+  /**
+   * When the transaction expires.
+   * This is an atlernate to specifying the ttl, for when you do not want to use local time.
+   */
+  deadline: number
+}
+
 /**
  * The parameters to use in the call to the Uniswap V2 Router to execute a trade.
  */
@@ -46,8 +54,8 @@ export interface SwapParameters {
   value: string
 }
 
-function toHex(currencyAmount: CurrencyAmount) {
-  return `0x${currencyAmount.raw.toString(16)}`
+function toHex(currencyAmount: CurrencyAmount<Currency>) {
+  return `0x${currencyAmount.quotient.toString(16)}`
 }
 
 const ZERO_HEX = '0x0'
@@ -65,18 +73,24 @@ export abstract class Router {
    * @param trade to produce call parameters for
    * @param options options for the call parameters
    */
-  public static swapCallParameters(trade: Trade, options: TradeOptions): SwapParameters {
-    const etherIn = trade.inputAmount.currency === ETHER
-    const etherOut = trade.outputAmount.currency === ETHER
+  public static swapCallParameters(
+    trade: Trade<Currency, Currency, TradeType>,
+    options: TradeOptions | TradeOptionsDeadline
+  ): SwapParameters {
+    const etherIn = trade.inputAmount.currency.isNative
+    const etherOut = trade.outputAmount.currency.isNative
     // the router does not support both ether in and out
     invariant(!(etherIn && etherOut), 'ETHER_IN_OUT')
-    invariant(options.ttl > 0, 'TTL')
+    invariant(!('ttl' in options) || options.ttl > 0, 'TTL')
 
     const to: string = validateAndParseAddress(options.recipient)
     const amountIn: string = toHex(trade.maximumAmountIn(options.allowedSlippage))
     const amountOut: string = toHex(trade.minimumAmountOut(options.allowedSlippage))
     const path: string[] = trade.route.path.map(token => token.address)
-    const deadline = `0x${(Math.floor(new Date().getTime() / 1000) + options.ttl).toString(16)}`
+    const deadline =
+      'ttl' in options
+        ? `0x${(Math.floor(new Date().getTime() / 1000) + options.ttl).toString(16)}`
+        : `0x${options.deadline.toString(16)}`
     const useFeeOnTransfer = Boolean(options.feeOnTransfer)
 
     let methodName: string

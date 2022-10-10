@@ -1,16 +1,15 @@
 import { Contract } from '@ethersproject/contracts'
 import { getNetwork } from '@ethersproject/networks'
 import { getDefaultProvider } from '@ethersproject/providers'
-import { TokenAmount } from './entities/fractions/tokenAmount'
 import { Pair } from './entities/pair'
 import IPancakePair from '@pancakeswap-libs/pancake-swap-core/build/IPancakePair.json'
 import invariant from 'tiny-invariant'
 import ERC20 from './abis/ERC20.json'
-import { ChainId, TradeState } from './constants'
-import { Token } from './entities/token'
+import { TradeState } from './constants'
+import { CurrencyAmount, SupportedChainId, Token } from '@uniswap/sdk-core'
 
 let TOKEN_DECIMALS_CACHE: { [chainId: number]: { [address: string]: number } } = {
-  [ChainId.MAINNET]: {
+  [SupportedChainId.MAINNET]: {
     '0xE0B7927c4aF23765Cb51314A0E0521A9645F0E2A': 9 // DGD
   }
 }
@@ -33,7 +32,7 @@ export abstract class Fetcher {
    * @param name optional name of the token
    */
   public static async fetchTokenData(
-    chainId: ChainId,
+    chainId: SupportedChainId,
     address: string,
     provider = getDefaultProvider(getNetwork(chainId)),
     symbol?: string,
@@ -79,8 +78,8 @@ export abstract class Fetcher {
     const [reserves0, reserves1] = await new Contract(address, IPancakePair.abi, provider).getReserves()
     const balances = tokenA.sortsBefore(tokenB) ? [reserves0, reserves1] : [reserves1, reserves0]
     return new Pair(
-      new TokenAmount(tokenA, balances[0]),
-      new TokenAmount(tokenB, balances[1]),
+      CurrencyAmount.fromRawAmount(tokenA, balances[0]),
+      CurrencyAmount.fromRawAmount(tokenB, balances[1]),
       isXybk,
       fee,
       boost0,

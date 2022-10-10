@@ -1,25 +1,5 @@
 import JSBI from 'jsbi'
 
-// exports for external consumption
-export type BigintIsh = JSBI | bigint | string
-
-export enum ChainId {
-  MAINNET = 56,
-  BSCTESTNET = 97,
-  MOONRIVER = 1285
-}
-
-export enum TradeType {
-  EXACT_INPUT,
-  EXACT_OUTPUT
-}
-
-export enum Rounding {
-  ROUND_DOWN,
-  ROUND_HALF_UP,
-  ROUND_UP
-}
-
 export enum TradeState {
   SELL_ALL,
   SELL_TOKEN_0,
