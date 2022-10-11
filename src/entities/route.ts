@@ -1,37 +1,27 @@
-import { ChainId } from '../constants'
 import invariant from 'tiny-invariant'
 
-import { Currency, ETHER } from './currency'
-import { Token, WETH } from './token'
 import { Pair } from './pair'
-import { Price } from './fractions/price'
+import { Currency, Price, SupportedChainId, Token } from '@uniswap/sdk-core'
+import JSBI from 'jsbi'
 
-export class Route {
+export class Route<TInput extends Currency, TOutput extends Currency> {
   public readonly pairs: Pair[]
   public readonly path: Token[]
-  public readonly input: Currency
-  public readonly output: Currency
-  public readonly midPrice: Price
+  public readonly input: TInput
+  public readonly output: TOutput
 
-  public constructor(pairs: Pair[], input: Currency, output?: Currency) {
+  public constructor(pairs: Pair[], input: TInput, output: TOutput) {
     invariant(pairs.length > 0, 'PAIRS')
     invariant(
       pairs.every(pair => pair.chainId === pairs[0].chainId),
       'CHAIN_IDS'
     )
-    invariant(
-      (input instanceof Token && pairs[0].involvesToken(input)) ||
-        (input === ETHER && pairs[0].involvesToken(WETH[pairs[0].chainId])),
-      'INPUT'
-    )
-    invariant(
-      typeof output === 'undefined' ||
-        (output instanceof Token && pairs[pairs.length - 1].involvesToken(output)) ||
-        (output === ETHER && pairs[pairs.length - 1].involvesToken(WETH[pairs[0].chainId])),
-      'OUTPUT'
-    )
 
-    const path: Token[] = [input instanceof Token ? input : WETH[pairs[0].chainId]]
+    const wrappedInput = input.wrapped
+    invariant(pairs[0].involvesToken(wrappedInput), 'INPUT')
+    invariant(typeof output === 'undefined' || pairs[pairs.length - 1].involvesToken(output.wrapped), 'OUTPUT')
+
+    const path: Token[] = [wrappedInput]
     for (const [i, pair] of pairs.entries()) {
       const currentInput = path[i]
       invariant(currentInput.equals(pair.token0) || currentInput.equals(pair.token1), 'PATH')
@@ -41,12 +31,48 @@ export class Route {
 
     this.pairs = pairs
     this.path = path
-    this.midPrice = Price.fromRoute(this)
     this.input = input
-    this.output = output ?? path[path.length - 1]
+    this.output = output
   }
 
-  public get chainId(): ChainId {
+  private _midPrice: Price<TInput, TOutput> | null = null
+  public get midPrice(): Price<TInput, TOutput> {
+    if (this._midPrice !== null) return this._midPrice
+
+    const prices: Price<Currency, Currency>[] = []
+    for (const [i, pair] of this.pairs.entries()) {
+      let term: JSBI = pair.artiLiquidityTerm(pair.getBoost())
+
+      prices.push(
+        this.path[i].equals(pair.token0)
+          ? pair.isXybk
+            ? new Price(
+                pair.reserve0.currency,
+                pair.reserve1.currency,
+                JSBI.add(pair.reserve0.numerator, term),
+                JSBI.add(pair.reserve1.numerator, term)
+              )
+            : new Price(
+                pair.reserve0.currency,
+                pair.reserve1.currency,
+                pair.reserve0.numerator,
+                pair.reserve1.numerator
+              )
+          : pair.isXybk
+          ? new Price(
+              pair.reserve1.currency,
+              pair.reserve0.currency,
+              JSBI.add(pair.reserve1.numerator, term),
+              JSBI.add(pair.reserve0.numerator, term)
+            )
+          : new Price(pair.reserve1.currency, pair.reserve0.currency, pair.reserve1.numerator, pair.reserve0.numerator)
+      )
+    }
+    const reduced = prices.slice(1).reduce((accumulator, currentValue) => accumulator.multiply(currentValue), prices[0])
+    return (this._midPrice = new Price(this.input, this.output, reduced.denominator, reduced.numerator))
+  }
+
+  public get chainId(): SupportedChainId {
     return this.pairs[0].chainId
   }
 }

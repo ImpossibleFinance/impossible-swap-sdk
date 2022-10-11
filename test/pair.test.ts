@@ -1,21 +1,31 @@
 // TODO: maximum amount transfer - take from bounds + hardstops
 
-import { ChainId, Token, Pair, TokenAmount, WETH, Price, TradeState } from '../src'
+import { Pair, TradeState } from '../src'
 import JSBI from 'jsbi'
+import { CurrencyAmount, Price, SupportedChainId, Token, WETH9 } from '@uniswap/sdk-core'
 
-const BasicPair = (a: TokenAmount, b: TokenAmount): Pair => {
+const BasicPair = (a: CurrencyAmount<Token>, b: CurrencyAmount<Token>): Pair => {
   return new Pair(a, b, false, 30, 1, 1, TradeState.SELL_ALL)
 }
 
 describe('Pair', () => {
-  const USDC = new Token(ChainId.MAINNET, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', 18, 'USDC', 'USD Coin')
-  const DAI = new Token(ChainId.MAINNET, '0x6B175474E89094C44Da98b954EedeAC495271d0F', 18, 'DAI', 'DAI Stablecoin')
+  const USDC = new Token(SupportedChainId.MAINNET, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', 18, 'USDC', 'USD Coin')
+  const DAI = new Token(
+    SupportedChainId.MAINNET,
+    '0x6B175474E89094C44Da98b954EedeAC495271d0F',
+    18,
+    'DAI',
+    'DAI Stablecoin'
+  )
 
   describe('constructor', () => {
     it('cannot be used for tokens on different chains', () => {
-      expect(() => BasicPair(new TokenAmount(USDC, '100'), new TokenAmount(WETH[ChainId.BSCTESTNET], '100'))).toThrow(
-        'CHAIN_IDS'
-      )
+      expect(() =>
+        BasicPair(
+          CurrencyAmount.fromRawAmount(USDC, '100'),
+          CurrencyAmount.fromRawAmount(WETH9[SupportedChainId.ARBITRUM_ONE], '100')
+        )
+      ).toThrow('CHAIN_IDS')
     })
   })
 
@@ -27,109 +37,129 @@ describe('Pair', () => {
 
   describe('#token0', () => {
     it('always is the token that sorts before', () => {
-      expect(BasicPair(new TokenAmount(USDC, '100'), new TokenAmount(DAI, '100')).token0).toEqual(DAI)
-      expect(BasicPair(new TokenAmount(DAI, '100'), new TokenAmount(USDC, '100')).token0).toEqual(DAI)
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(USDC, '100'), CurrencyAmount.fromRawAmount(DAI, '100')).token0
+      ).toEqual(DAI)
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(DAI, '100'), CurrencyAmount.fromRawAmount(USDC, '100')).token0
+      ).toEqual(DAI)
     })
   })
   describe('#token1', () => {
     it('always is the token that sorts after', () => {
-      expect(BasicPair(new TokenAmount(USDC, '100'), new TokenAmount(DAI, '100')).token1).toEqual(USDC)
-      expect(BasicPair(new TokenAmount(DAI, '100'), new TokenAmount(USDC, '100')).token1).toEqual(USDC)
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(USDC, '100'), CurrencyAmount.fromRawAmount(DAI, '100')).token1
+      ).toEqual(USDC)
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(DAI, '100'), CurrencyAmount.fromRawAmount(USDC, '100')).token1
+      ).toEqual(USDC)
     })
   })
   describe('#reserve0', () => {
     it('always comes from the token that sorts before', () => {
-      expect(BasicPair(new TokenAmount(USDC, '100'), new TokenAmount(DAI, '101')).reserve0).toEqual(
-        new TokenAmount(DAI, '101')
-      )
-      expect(BasicPair(new TokenAmount(DAI, '101'), new TokenAmount(USDC, '100')).reserve0).toEqual(
-        new TokenAmount(DAI, '101')
-      )
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(USDC, '100'), CurrencyAmount.fromRawAmount(DAI, '101')).reserve0
+      ).toEqual(CurrencyAmount.fromRawAmount(DAI, '101'))
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(DAI, '101'), CurrencyAmount.fromRawAmount(USDC, '100')).reserve0
+      ).toEqual(CurrencyAmount.fromRawAmount(DAI, '101'))
     })
   })
   describe('#reserve1', () => {
     it('always comes from the token that sorts after', () => {
-      expect(BasicPair(new TokenAmount(USDC, '100'), new TokenAmount(DAI, '101')).reserve1).toEqual(
-        new TokenAmount(USDC, '100')
-      )
-      expect(BasicPair(new TokenAmount(DAI, '101'), new TokenAmount(USDC, '100')).reserve1).toEqual(
-        new TokenAmount(USDC, '100')
-      )
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(USDC, '100'), CurrencyAmount.fromRawAmount(DAI, '101')).reserve1
+      ).toEqual(CurrencyAmount.fromRawAmount(USDC, '100'))
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(DAI, '101'), CurrencyAmount.fromRawAmount(USDC, '100')).reserve1
+      ).toEqual(CurrencyAmount.fromRawAmount(USDC, '100'))
     })
   })
 
   describe('uniswap #token0Price', () => {
     it('returns price of token0 in terms of token1', () => {
-      expect(BasicPair(new TokenAmount(USDC, '101'), new TokenAmount(DAI, '100')).token0Price).toEqual(
-        new Price(DAI, USDC, '100', '101')
-      )
-      expect(BasicPair(new TokenAmount(DAI, '100'), new TokenAmount(USDC, '101')).token0Price).toEqual(
-        new Price(DAI, USDC, '100', '101')
-      )
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(USDC, '101'), CurrencyAmount.fromRawAmount(DAI, '100')).token0Price
+      ).toEqual(new Price(DAI, USDC, '100', '101'))
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(DAI, '100'), CurrencyAmount.fromRawAmount(USDC, '101')).token0Price
+      ).toEqual(new Price(DAI, USDC, '100', '101'))
     })
   })
 
   describe('uniswap #token1Price', () => {
     it('returns price of token1 in terms of token0', () => {
-      expect(BasicPair(new TokenAmount(USDC, '101'), new TokenAmount(DAI, '100')).token1Price).toEqual(
-        new Price(USDC, DAI, '101', '100')
-      )
-      expect(BasicPair(new TokenAmount(DAI, '100'), new TokenAmount(USDC, '101')).token1Price).toEqual(
-        new Price(USDC, DAI, '101', '100')
-      )
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(USDC, '101'), CurrencyAmount.fromRawAmount(DAI, '100')).token1Price
+      ).toEqual(new Price(USDC, DAI, '101', '100'))
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(DAI, '100'), CurrencyAmount.fromRawAmount(USDC, '101')).token1Price
+      ).toEqual(new Price(USDC, DAI, '101', '100'))
     })
   })
 
   describe('uniswap #priceOf', () => {
-    const pair = BasicPair(new TokenAmount(USDC, '101'), new TokenAmount(DAI, '100'))
+    const pair = BasicPair(CurrencyAmount.fromRawAmount(USDC, '101'), CurrencyAmount.fromRawAmount(DAI, '100'))
     it('returns price of token in terms of other token', () => {
       expect(pair.priceOf(DAI)).toEqual(pair.token0Price)
       expect(pair.priceOf(USDC)).toEqual(pair.token1Price)
     })
 
     it('throws if invalid token', () => {
-      expect(() => pair.priceOf(WETH[ChainId.MAINNET])).toThrow('TOKEN')
+      expect(() => pair.priceOf(WETH9[SupportedChainId.MAINNET])).toThrow('TOKEN')
     })
   })
 
   describe('#reserveOf', () => {
     it('returns reserves of the given token', () => {
-      expect(BasicPair(new TokenAmount(USDC, '100'), new TokenAmount(DAI, '101')).reserveOf(USDC)).toEqual(
-        new TokenAmount(USDC, '100')
-      )
-      expect(BasicPair(new TokenAmount(DAI, '101'), new TokenAmount(USDC, '100')).reserveOf(USDC)).toEqual(
-        new TokenAmount(USDC, '100')
-      )
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(USDC, '100'), CurrencyAmount.fromRawAmount(DAI, '101')).reserveOf(USDC)
+      ).toEqual(CurrencyAmount.fromRawAmount(USDC, '100'))
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(DAI, '101'), CurrencyAmount.fromRawAmount(USDC, '100')).reserveOf(USDC)
+      ).toEqual(CurrencyAmount.fromRawAmount(USDC, '100'))
     })
 
     it('throws if not in the pair', () => {
       expect(() =>
-        BasicPair(new TokenAmount(DAI, '101'), new TokenAmount(USDC, '100')).reserveOf(WETH[ChainId.MAINNET])
+        BasicPair(CurrencyAmount.fromRawAmount(DAI, '101'), CurrencyAmount.fromRawAmount(USDC, '100')).reserveOf(
+          WETH9[SupportedChainId.MAINNET]
+        )
       ).toThrow('TOKEN')
     })
   })
 
   describe('#chainId', () => {
     it('returns the token0 chainId', () => {
-      expect(BasicPair(new TokenAmount(USDC, '100'), new TokenAmount(DAI, '100')).chainId).toEqual(ChainId.MAINNET)
-      expect(BasicPair(new TokenAmount(DAI, '100'), new TokenAmount(USDC, '100')).chainId).toEqual(ChainId.MAINNET)
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(USDC, '100'), CurrencyAmount.fromRawAmount(DAI, '100')).chainId
+      ).toEqual(SupportedChainId.MAINNET)
+      expect(
+        BasicPair(CurrencyAmount.fromRawAmount(DAI, '100'), CurrencyAmount.fromRawAmount(USDC, '100')).chainId
+      ).toEqual(SupportedChainId.MAINNET)
     })
   })
   describe('#involvesToken', () => {
-    expect(BasicPair(new TokenAmount(USDC, '100'), new TokenAmount(DAI, '100')).involvesToken(USDC)).toEqual(true)
-    expect(BasicPair(new TokenAmount(USDC, '100'), new TokenAmount(DAI, '100')).involvesToken(DAI)).toEqual(true)
     expect(
-      BasicPair(new TokenAmount(USDC, '100'), new TokenAmount(DAI, '100')).involvesToken(WETH[ChainId.MAINNET])
+      BasicPair(CurrencyAmount.fromRawAmount(USDC, '100'), CurrencyAmount.fromRawAmount(DAI, '100')).involvesToken(USDC)
+    ).toEqual(true)
+    expect(
+      BasicPair(CurrencyAmount.fromRawAmount(USDC, '100'), CurrencyAmount.fromRawAmount(DAI, '100')).involvesToken(DAI)
+    ).toEqual(true)
+    expect(
+      BasicPair(CurrencyAmount.fromRawAmount(USDC, '100'), CurrencyAmount.fromRawAmount(DAI, '100')).involvesToken(
+        WETH9[SupportedChainId.MAINNET]
+      )
     ).toEqual(false)
   })
 
   describe('uniswap amounts', () => {
-    const inputAmount: TokenAmount = new TokenAmount(USDC, '1000000000000000000') // 1
-    const outputAmount: TokenAmount = new TokenAmount(DAI, '987158034397061298') // 0.987
+    const inputAmount: CurrencyAmount<Token> = CurrencyAmount.fromRawAmount(USDC, '1000000000000000000') // 1
+    const outputAmount: CurrencyAmount<Token> = CurrencyAmount.fromRawAmount(DAI, '987158034397061298') // 0.987
     expect(
       BasicPair(
-        new TokenAmount(USDC, '100000000000000000000'), // 100
-        new TokenAmount(DAI, '100000000000000000000')
+        CurrencyAmount.fromRawAmount(USDC, '100000000000000000000'), // 100
+        CurrencyAmount.fromRawAmount(DAI, '100000000000000000000')
       ) // 100
         .getOutputAmount(inputAmount)[0]
     ).toEqual(outputAmount)
@@ -152,9 +182,10 @@ describe('Pair', () => {
     ]
 
     tests.forEach(elem => {
-      const result: JSBI = BasicPair(new TokenAmount(USDC, '1000'), new TokenAmount(DAI, '1000')).sqrt(
-        JSBI.BigInt(elem.k)
-      )
+      const result: JSBI = BasicPair(
+        CurrencyAmount.fromRawAmount(USDC, '1000'),
+        CurrencyAmount.fromRawAmount(DAI, '1000')
+      ).sqrt(JSBI.BigInt(elem.k))
       it('should be within +- 5wei', () => {
         expect(checkBounds(result, JSBI.BigInt(elem.sqrtK))).toBe(true)
       })
@@ -170,8 +201,8 @@ describe('Pair', () => {
       amounts.forEach(a => {
         boosts.forEach(b => {
           const result: JSBI = new Pair(
-            new TokenAmount(USDC, a),
-            new TokenAmount(DAI, a),
+            CurrencyAmount.fromRawAmount(USDC, a),
+            CurrencyAmount.fromRawAmount(DAI, a),
             true,
             30,
             b,
@@ -196,8 +227,8 @@ describe('Pair', () => {
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
         let result: JSBI = new Pair(
-          new TokenAmount(USDC, elem.a),
-          new TokenAmount(DAI, elem.b),
+          CurrencyAmount.fromRawAmount(USDC, elem.a),
+          CurrencyAmount.fromRawAmount(DAI, elem.b),
           true,
           30,
           10,
@@ -234,34 +265,37 @@ describe('Pair', () => {
 
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
-        let input: TokenAmount = new TokenAmount(DAI, elem.amount0)
-        let output: [TokenAmount, TokenAmount, Pair] = new Pair(
-          new TokenAmount(DAI, elem.reserve0),
-          new TokenAmount(USDC, elem.reserve1),
+        let input: CurrencyAmount<Token> = CurrencyAmount.fromRawAmount(DAI, elem.amount0)
+        let output: [CurrencyAmount<Token>, CurrencyAmount<Token>, Pair] = new Pair(
+          CurrencyAmount.fromRawAmount(DAI, elem.reserve0),
+          CurrencyAmount.fromRawAmount(USDC, elem.reserve1),
           false,
           30,
           1,
           1,
           TradeState.SELL_ALL
         ).getOutputAmount(input)
-        expect(checkBounds(output[0].raw, JSBI.BigInt(elem.amount1))).toBe(true)
+        expect(checkBounds(output[0].numerator, JSBI.BigInt(elem.amount1))).toBe(true)
 
         expect(output[2].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
         expect(
-          checkBounds(output[2].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(output[2].reserve0.numerator, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(output[2].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(
+            output[2].reserve1.numerator,
+            JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1))
+          )
         ).toBe(true)
       })
     })
 
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
-        let output: TokenAmount = new TokenAmount(USDC, elem.amount1)
-        let input: [TokenAmount, Pair] = new Pair(
-          new TokenAmount(DAI, elem.reserve0),
-          new TokenAmount(USDC, elem.reserve1),
+        let output: CurrencyAmount<Token> = CurrencyAmount.fromRawAmount(USDC, elem.amount1)
+        let input: [CurrencyAmount<Token>, Pair] = new Pair(
+          CurrencyAmount.fromRawAmount(DAI, elem.reserve0),
+          CurrencyAmount.fromRawAmount(USDC, elem.reserve1),
           false,
           30,
           1,
@@ -269,13 +303,13 @@ describe('Pair', () => {
           TradeState.SELL_ALL
         ).getInputAmount(output)
 
-        expect(checkBounds(input[0].raw, JSBI.BigInt(elem.amount0))).toBe(true)
+        expect(checkBounds(input[0].numerator, JSBI.BigInt(elem.amount0))).toBe(true)
         expect(input[1].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve0
         expect(
-          checkBounds(input[1].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(input[1].reserve0.numerator, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(input[1].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(input[1].reserve1.numerator, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
         ).toBe(true)
       })
     })
@@ -306,10 +340,10 @@ describe('Pair', () => {
 
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
-        let input: TokenAmount = new TokenAmount(DAI, elem.amount0)
-        let output: [TokenAmount, TokenAmount, Pair] = new Pair(
-          new TokenAmount(DAI, elem.reserve0),
-          new TokenAmount(USDC, elem.reserve1),
+        let input: CurrencyAmount<Token> = CurrencyAmount.fromRawAmount(DAI, elem.amount0)
+        let output: [CurrencyAmount<Token>, CurrencyAmount<Token>, Pair] = new Pair(
+          CurrencyAmount.fromRawAmount(DAI, elem.reserve0),
+          CurrencyAmount.fromRawAmount(USDC, elem.reserve1),
           true,
           30,
           10,
@@ -317,24 +351,27 @@ describe('Pair', () => {
           TradeState.SELL_ALL
         ).getOutputAmount(input)
 
-        expect(checkBounds(output[0].raw, JSBI.BigInt(elem.amount1))).toBe(true)
+        expect(checkBounds(output[0].numerator, JSBI.BigInt(elem.amount1))).toBe(true)
 
         expect(output[2].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
         expect(
-          checkBounds(output[2].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(output[2].reserve0.numerator, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(output[2].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(
+            output[2].reserve1.numerator,
+            JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1))
+          )
         ).toBe(true)
       })
     })
 
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
-        let output: TokenAmount = new TokenAmount(USDC, elem.amount1)
-        let input: [TokenAmount, Pair] = new Pair(
-          new TokenAmount(DAI, elem.reserve0),
-          new TokenAmount(USDC, elem.reserve1),
+        let output: CurrencyAmount<Token> = CurrencyAmount.fromRawAmount(USDC, elem.amount1)
+        let input: [CurrencyAmount<Token>, Pair] = new Pair(
+          CurrencyAmount.fromRawAmount(DAI, elem.reserve0),
+          CurrencyAmount.fromRawAmount(USDC, elem.reserve1),
           true,
           30,
           10,
@@ -342,13 +379,13 @@ describe('Pair', () => {
           TradeState.SELL_ALL
         ).getInputAmount(output)
 
-        expect(checkBounds(input[0].raw, JSBI.BigInt(elem.amount0))).toBe(true)
+        expect(checkBounds(input[0].numerator, JSBI.BigInt(elem.amount0))).toBe(true)
         expect(input[1].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve0
         expect(
-          checkBounds(input[1].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(input[1].reserve0.numerator, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(input[1].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(input[1].reserve1.numerator, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
         ).toBe(true)
       })
     })
@@ -379,10 +416,10 @@ describe('Pair', () => {
 
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
-        let input: TokenAmount = new TokenAmount(DAI, elem.amount0)
-        let output: [TokenAmount, TokenAmount, Pair] = new Pair(
-          new TokenAmount(DAI, elem.reserve0),
-          new TokenAmount(USDC, elem.reserve1),
+        let input: CurrencyAmount<Token> = CurrencyAmount.fromRawAmount(DAI, elem.amount0)
+        let output: [CurrencyAmount<Token>, CurrencyAmount<Token>, Pair] = new Pair(
+          CurrencyAmount.fromRawAmount(DAI, elem.reserve0),
+          CurrencyAmount.fromRawAmount(USDC, elem.reserve1),
           true,
           30,
           28,
@@ -390,24 +427,27 @@ describe('Pair', () => {
           TradeState.SELL_ALL
         ).getOutputAmount(input)
 
-        expect(checkBounds(output[0].raw, JSBI.BigInt(elem.amount1))).toBe(true)
+        expect(checkBounds(output[0].numerator, JSBI.BigInt(elem.amount1))).toBe(true)
 
         expect(output[2].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve1
         expect(
-          checkBounds(output[2].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(output[2].reserve0.numerator, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(output[2].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(
+            output[2].reserve1.numerator,
+            JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1))
+          )
         ).toBe(true)
       })
     })
 
     it('should be within +- 5wei', () => {
       tests.forEach(elem => {
-        let output: TokenAmount = new TokenAmount(USDC, elem.amount1)
-        let input: [TokenAmount, Pair] = new Pair(
-          new TokenAmount(DAI, elem.reserve0),
-          new TokenAmount(USDC, elem.reserve1),
+        let output: CurrencyAmount<Token> = CurrencyAmount.fromRawAmount(USDC, elem.amount1)
+        let input: [CurrencyAmount<Token>, Pair] = new Pair(
+          CurrencyAmount.fromRawAmount(DAI, elem.reserve0),
+          CurrencyAmount.fromRawAmount(USDC, elem.reserve1),
           true,
           30,
           28,
@@ -415,13 +455,13 @@ describe('Pair', () => {
           TradeState.SELL_ALL
         ).getInputAmount(output)
 
-        expect(checkBounds(input[0].raw, JSBI.BigInt(elem.amount0))).toBe(true)
+        expect(checkBounds(input[0].numerator, JSBI.BigInt(elem.amount0))).toBe(true)
         expect(input[1].token1).toEqual(USDC) // reserve1 in pair object corresponds to reserve0
         expect(
-          checkBounds(input[1].reserve0.raw, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
+          checkBounds(input[1].reserve0.numerator, JSBI.add(JSBI.BigInt(elem.reserve0), JSBI.BigInt(elem.amount0)))
         ).toBe(true)
         expect(
-          checkBounds(input[1].reserve1.raw, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
+          checkBounds(input[1].reserve1.numerator, JSBI.subtract(JSBI.BigInt(elem.reserve1), JSBI.BigInt(elem.amount1)))
         ).toBe(true)
       })
     })
